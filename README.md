@@ -35,7 +35,7 @@ An example can be found in the 'example' folder.
 6. Except for the name columns, keep the names and structure of the first 5 columns (Day-Time-Group-Location-Room) exactly as the example. The script expects the columns from column 6 onwards to be the TAs their names and corresponding availability
 7. Make sure the time is indicated by a start time and end time (e.g. 09:00-11:00).
 
-### Required packages
+### Required packages:
 - pandas
 - numpy
 - python-constraint
