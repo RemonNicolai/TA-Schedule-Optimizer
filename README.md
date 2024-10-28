@@ -1,5 +1,5 @@
 # TA-Schedule-Optimizer
-Python-based scheduler that automatically generates optimal weekly schedules for TAs, factoring in availability, shift constraints, and preference prioritization. This tool uses constraint satisfaction techniques to assign shifts fairly and efficiently while avoiding conflicts.
+Python-based scheduler that automatically generates optimal weekly schedules for Teaching Assistants (TAs; employees), factoring in availability, shift constraints, and preference prioritization. This tool uses constraint satisfaction techniques to assign shifts fairly and efficiently while avoiding conflicts. Originally created for the Statistics and Psychometrics department of the BSS Faculty at the University of Groningen
 
 ## Constraint Satisfaction Problem
 The problem of making a schedule is an instance of a Constraint Satisfaction
