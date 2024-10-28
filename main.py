@@ -11,9 +11,6 @@ from schedule_maker_practical import *
     
 '''
 
-# set working directory --> this is where the schedule is outputted
-# os.chdir('YOURPATH')
-
 # define where Excel file can be found
 path_excelfile = "examples\\example_dataframe_long.xlsx" # make sure to use '\\'
 
