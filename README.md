@@ -21,6 +21,10 @@ increases significantly (2h+).
 If the duration takes more than 4h, the problem's dimensionality is likely too large. Consider whether
 this many groups and TAs are needed. ;)
 
+## To Do's
+- Implement an OOP framework to improve readability.
+- Finalize 'Differing Weekly Availability' script
+
 ## Instructions
 To make the schedule maker script work, do what is listed below.
 
