@@ -20,3 +20,22 @@ increases significantly (2h+).
     
 If the duration takes more than 4h, the problem's dimensionality is likely too large. Consider whether
 this many groups and TAs are needed. ;)
+
+## Instructions
+To make the schedule maker script work, do what is listed below.
+
+### Dataframe Requirements:
+An example can be found in the 'example' folder.
+
+1. Ensure that TAs can answer with "Yes", "Preferably Not", and "No". The differentiation between "Yes" and "Preferably Not" is very important. 
+2. Use validation lists so that TAs can only answer with "Yes", "Preferably Not" and "No", so that no problems occur with these strings (e.g. typos and missing capital letters).
+3. Double check whether the answer options are limited to "Yes", "Preferably Not" and "No".
+4. Use a suffix that indicates the number of shifts a TA has in their name column. If Bob has two shifts, the column name should be "Bob_2"
+5. Ensure that the total number of shifts is equal to the number of groups.
+6. Except for the name columns, keep the names and structure of the first 5 columns (Day-Time-Group-Location-Room) exactly as the example. The script expects the columns from column 6 onwards to be the TAs their names and corresponding availability
+7. Make sure the time is indicated by a start time and end time (e.g. 09:00-11:00).
+
+### Required packages
+- pandas
+- numpy
+- python-constraint
