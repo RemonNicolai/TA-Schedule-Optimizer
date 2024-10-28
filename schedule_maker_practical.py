@@ -49,7 +49,9 @@ def generate_schedule(dataframe, suffix = None, required_columns = int(9),
     if min_availability_ratio <= 0.0 or min_availability_ratio >= 1.0:
         sys.exit("min_availability_ratio must be between 0.0 and 1.0")
 
-    if suffix is None:
+    if suffix is not None:
+        suffix = str(suffix)
+    elif suffix is None:
         suffix = str(input("Please specify a suffix for the schedule: "))
 
     start = time.time()
@@ -220,10 +222,13 @@ def generate_schedule(dataframe, suffix = None, required_columns = int(9),
     if merged:
         df.loc[df["TA"].str.contains("-"), "Warning"] = "don't forget to split TAs again"
 
-    df.to_excel(f'schedule_{suffix}.xlsx')
-
     cd = os.getcwd()
-    print(f'Final schedule created and written to "{cd}\\schedule_{suffix}.xlsx"')
+    output_path = os.path.join(cd,'output')
+    os.mkdir(output_path)
+    output_file = f'schedule_{suffix}.xlsx'
+    df.to_excel(os.path.join(output_path, output_file))
+
+    print(f'Final schedule created and written to "{output_path}\\{output_file}"')
     print('It took {0:0.1f} seconds'.format(time.time() - start))
     return df
 
