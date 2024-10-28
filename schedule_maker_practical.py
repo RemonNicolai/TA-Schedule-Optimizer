@@ -41,13 +41,16 @@ pd.set_option('future.no_silent_downcasting', True)
 '''
 
 ####### Main function to generate schedule #######
-def generate_schedule(dataframe, suffix = str, required_columns = int(9),
+def generate_schedule(dataframe, suffix = None, required_columns = int(9),
                       min_availability_ratio = float(0.5),consecutive_ratio = float(0.4)):
 
     if consecutive_ratio <= 0.0 or consecutive_ratio >= 1.0:
         sys.exit("consecutive_ratio must be between 0.0 and 1.0")
     if min_availability_ratio <= 0.0 or min_availability_ratio >= 1.0:
         sys.exit("min_availability_ratio must be between 0.0 and 1.0")
+
+    if suffix is None:
+        suffix = str(input("Please specify a suffix for the schedule: "))
 
     start = time.time()
     df = dataframe

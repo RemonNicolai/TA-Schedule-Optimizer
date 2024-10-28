@@ -15,13 +15,10 @@ from schedule_maker_practical import *
 os.chdir('YOURPATH')
 
 # define where Excel file can be found
-path_excelfile = "YOURPATH\\example_dataframe_long.xlsx" # make sure to use '\\'
-
-# name suffix
-suffix = "STATSII_ENG"
+path_excelfile = "examples\\example_dataframe_long.xlsx" # make sure to use '\\'
 
 # read file
 df = pd.read_excel(path_excelfile)
 
 # generate schedule
-df = generate_schedule(dataframe=df, suffix=suffix, min_availability_ratio = 0.3)
+df = generate_schedule(dataframe=df, min_availability_ratio = 0.3)
