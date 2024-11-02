@@ -1,5 +1,5 @@
 # import functions to create schedule, and import other packages
-from schedule_maker_practical import *
+from scheduler import *
 
 '''
     These scripts can be used or adapted to create a schedule for the Statistics Practicals for the
