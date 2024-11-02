@@ -1,4 +1,5 @@
 # import functions to create schedule, and import other packages
+#from schedule_maker import *
 from schedule_maker import *
 
 # define where Excel file can be found

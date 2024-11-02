@@ -8,17 +8,20 @@ from openpyxl.formatting.rule import Rule
 from openpyxl.styles.differential import DifferentialStyle
 
 # name shopkeepers and select days
-os.chdir('C:\\Users\\remon\\OneDrive\\Bureaublad\\Werk\\Methodology Shop') # set working directory
 shopkeepers = ["Remon", "Sebastian", "Aya", "Jadwiga"]
 block_number = "1b"
 first_day = datetime.strptime('10/11/2024', '%d/%m/%Y')  # pick the Sunday before
 last_day = datetime.strptime('02/02/2025', '%d/%m/%Y')
 
-
 # Create CSV file to specify availability with shopkeepers
 def create_availability_excel(shopkeepers, first_day, last_day, block_number = str()):
 
+    cd = os.getcwd()
+    output_path = os.path.join(cd,'availability-template output')
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
     filename = "availability" + block_number + ".xlsx"
+    full_path = os.path.join(output_path, filename)
     day_list = []
     current_day = first_day
 
@@ -49,10 +52,10 @@ def create_availability_excel(shopkeepers, first_day, last_day, block_number = s
     schedule_df.iloc[2, 3] = 'No'
 
     # Save DataFrame to an Excel file (CSV doesn't support data validation)
-    schedule_df.to_excel(filename, index=False)
+    schedule_df.to_excel(full_path, index=False)
 
     # Load the workbook and worksheet for adding validation and conditional formatting
-    wb = load_workbook(filename)
+    wb = load_workbook(full_path)
     ws = wb.active
 
     # Apply validation to the shopkeeper columns (starting from column 4)
@@ -88,9 +91,9 @@ def create_availability_excel(shopkeepers, first_day, last_day, block_number = s
                                            dxf=DifferentialStyle(fill=fill)))
 
     # Save the Excel file with data validation and conditional formatting
-    wb.save(filename)
+    wb.save(full_path)
     print(
-        "Availability excel sheet created successfully")
+        f"Availability excel sheet created successfully and written to {full_path}")
 
     RED_TEXT = "\033[91m"
     RESET_TEXT = "\033[0m"
