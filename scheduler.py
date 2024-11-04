@@ -30,15 +30,81 @@ pd.set_option('future.no_silent_downcasting', True)
     have plenty of other availability already. You could also, for example, treat persons with similar
     availability as one person by collapsing their availability and later on splitting them apart again.
 
-    See, e.g., functions in *schedule_maker_practical.py*
-    My personal experience is that 12/13 groups with TAs who are available for on average 5 groups works perfectly fine
+    See, e.g., the functions in *scheduler.py* that automatically reduce the dimensionality
+    My personal experience is that 12/13 groups with TAs who are available for on average 5 groups
+    works perfectly fine
+
 
     ##### DATAFRAME PREPROCESSING #####
-
-    Script needs a specific structure as input, the script won't work without this structure. Thus, some preprocessing
-    is required. See the example dataframe for the requirements.
+    Script needs a specific structure as input, the script won't work without this structure. 
+    Thus, some preprocessing is required. See the example dataframe for the requirements.
 
 '''
+####### Main function to generate schedule #######
+def generate_schedule(dataframe, suffix = None, required_columns = int(9),
+                      min_availability_ratio = float(0.5),consecutive_ratio = float(0.4)):
+    """
+    main function to generate the schedule
+    """
+
+    if consecutive_ratio <= 0.0 or consecutive_ratio >= 1.0:
+        sys.exit("consecutive_ratio must be between 0.0 and 1.0")
+    if min_availability_ratio <= 0.0 or min_availability_ratio >= 1.0:
+        sys.exit("min_availability_ratio must be between 0.0 and 1.0")
+
+    if suffix is not None:
+        suffix = str(suffix)
+    elif suffix is None:
+        suffix = str(input("Please specify a suffix for the schedule: "))
+
+    start = time.time()
+    df = dataframe
+
+    # check whether columns of dataframe have the correct names and structure
+    check_input_range(df)
+    check_structure(df)
+
+    """
+    if number of employees is larger than 9, merge TA availability
+    """
+    employee_columns = df.columns[5:]
+    num_employees = len(employee_columns)
+    merged = False
+    if num_employees > 9:  # only do this when number of TAs is larger than 9, otherwise not necessary
+        df, merged = merge_employee_availability(df, required_columns=required_columns)
+
+    """
+    if the number of groups is larger than 16 (arbitrary cut-off), find the first solution. Typically this solution is
+    already near ideal.
+    """
+    n_groups = df.shape[0]
+    if n_groups > 16:
+        all_solutions = False
+    else:
+        all_solutions = True
+
+    # decrease preferably not rate
+    df = decrease_preferably_not(df,min_availability_ratio=min_availability_ratio)
+
+    # CSP setup
+    solutions = extract_solutions(df, all_solutions, consecutive_ratio)
+    if not solutions:
+        sys.exit("No solutions found, check your dataframe!")
+    elif isinstance(solutions, dict):
+        # immediately return dataframe
+        solution = solutions
+    else:
+        solution = process_solutions(solutions, df)
+
+    # create dataframe to output solution to Excel
+    df = dict_to_dataframe(solution, df)
+    if merged:
+        df.loc[df["TA"].str.contains("-"), "Warning"] = "don't forget to split TAs again"
+
+    write_excel(df, suffix)
+    print('It took {0:0.1f} seconds'.format(time.time() - start))
+    return df
+
 
 ### helper and utility functions ####
 def check_input_range(df):
@@ -170,7 +236,6 @@ def dict_to_dataframe(schedule_dict, original_df):
     return df_copy
 
 
-
 def write_excel(df, suffix):
     """
     write dataframe to excel
@@ -185,62 +250,15 @@ def write_excel(df, suffix):
     print(f'Final schedule created and written to "{full_path}"')
 
 
-### Further processing of solutions functions ###
-def count_consecutive(solutions, consecutive_groups):
-    """
-    count number of consecutive groups (same TA)
-    """
-    for solution in solutions:
-        consecutive_count = 0
-        for shift1, shift2 in consecutive_groups:
-            # check if both consecutive shifts are assigned to the same person in the solution
-            if solution.get(shift1) == solution.get(shift2):
-                consecutive_count += 1
-
-        # Add the consecutive shift count to the solution
-        solution['consecutive_shift_count'] = consecutive_count
-    return solutions
-
-
-def count_preference(solutions, team):
-    """
-    count number of non-preference groups in solution
-    """
-    for solution in solutions:
-        prefNot_counter = 0
-        for group, person in solution.items():
-                if team[person]['availability'].get(group) == 'Preferably Not':
-                    # delete the availability from solution
-                    prefNot_counter += 1
-        solution['preferably_not_count'] = prefNot_counter
-    return solutions
-
-
-def process_solutions(solutions, df):
-    """
-    Further processes the solutions in case there are multiple solutions.
-    Best solution is selected by first picking the one with the most
-    consecutive shifts (for a TA). If there are still more than 1 left,
-    out of these, it picks the one with the least amount of 'Preferably Not'
-    """
-    team = create_team_availability(df)
-    consecutive_groups = extract_consecutive_combinations(df)[0]
-
-    # count number of consecutive groups and number of 'Preferably Not'
-    solutions = count_consecutive(solutions, consecutive_groups)
-    solutions = count_preference(solutions, team)
-
-    # extract list of solutions with max count of consecutive shifts
-    max_count = max(sol['consecutive_shift_count'] for sol in solutions)
-    solutions_with_most_consecutive = [sol for sol in solutions if sol['consecutive_shift_count'] == max_count]
-
-    # from this list, pick the solution with least 'Preferably Not' count
-    best_solution = min(solutions_with_most_consecutive, key=lambda sol: sol['preferably_not_count'])
-    return best_solution
-
-
-### Extract solutions functions ###
-def custom_constraint(*values, list_of_groups, incompatible_combinations, consecutive_groups, plus1shift, consecutive_ratio = float(),team_dict, all_solutions):
+### Functions to extract solutions ###
+def custom_constraint(*values,
+                      list_of_groups,
+                      incompatible_combinations,
+                      consecutive_groups,
+                      plus1shift,
+                      consecutive_ratio = float(),
+                      team_dict,
+                      all_solutions):
     """
     custom constraint with nested checks
     """
@@ -355,6 +373,60 @@ def extract_solutions(df, all_solutions, consecutive_ratio):
         solutions = problem.getSolution()
 
     return solutions
+
+
+### Further processing of solutions functions ###
+def count_consecutive(solutions, consecutive_groups):
+    """
+    count number of consecutive groups (same TA)
+    """
+    for solution in solutions:
+        consecutive_count = 0
+        for shift1, shift2 in consecutive_groups:
+            # check if both consecutive shifts are assigned to the same person in the solution
+            if solution.get(shift1) == solution.get(shift2):
+                consecutive_count += 1
+
+        # Add the consecutive shift count to the solution
+        solution['consecutive_shift_count'] = consecutive_count
+    return solutions
+
+
+def count_preference(solutions, team):
+    """
+    count number of non-preference groups in solution
+    """
+    for solution in solutions:
+        prefNot_counter = 0
+        for group, person in solution.items():
+                if team[person]['availability'].get(group) == 'Preferably Not':
+                    # delete the availability from solution
+                    prefNot_counter += 1
+        solution['preferably_not_count'] = prefNot_counter
+    return solutions
+
+
+def process_solutions(solutions, df):
+    """
+    Further processes the solutions in case there are multiple solutions.
+    Best solution is selected by first picking the one with the most
+    consecutive shifts (for a TA). If there are still more than 1 left,
+    out of these, it picks the one with the least amount of 'Preferably Not'
+    """
+    team = create_team_availability(df)
+    consecutive_groups = extract_consecutive_combinations(df)[0]
+
+    # count number of consecutive groups and number of 'Preferably Not'
+    solutions = count_consecutive(solutions, consecutive_groups)
+    solutions = count_preference(solutions, team)
+
+    # extract list of solutions with max count of consecutive shifts
+    max_count = max(sol['consecutive_shift_count'] for sol in solutions)
+    solutions_with_most_consecutive = [sol for sol in solutions if sol['consecutive_shift_count'] == max_count]
+
+    # from this list, pick the solution with least 'Preferably Not' count
+    best_solution = min(solutions_with_most_consecutive, key=lambda sol: sol['preferably_not_count'])
+    return best_solution
 
 
 ##### REDUCE DIMENSIONS FUNCTIONS ######
@@ -505,66 +577,3 @@ def merge_employee_availability(df, required_columns):
         columns_to_compare = df.columns[5:]
         n_domains = len(columns_to_compare)
     return df, True
-
-
-####### Main function to generate schedule #######
-def generate_schedule(dataframe, suffix = None, required_columns = int(9),
-                      min_availability_ratio = float(0.5),consecutive_ratio = float(0.4)):
-
-    if consecutive_ratio <= 0.0 or consecutive_ratio >= 1.0:
-        sys.exit("consecutive_ratio must be between 0.0 and 1.0")
-    if min_availability_ratio <= 0.0 or min_availability_ratio >= 1.0:
-        sys.exit("min_availability_ratio must be between 0.0 and 1.0")
-
-    if suffix is not None:
-        suffix = str(suffix)
-    elif suffix is None:
-        suffix = str(input("Please specify a suffix for the schedule: "))
-
-    start = time.time()
-    df = dataframe
-
-    # check whether columns of dataframe have the correct names and structure
-    check_input_range(df)
-    check_structure(df)
-
-    """
-    if number of employees is larger than 9, merge TA availability
-    """
-    employee_columns = df.columns[5:]
-    num_employees = len(employee_columns)
-    merged = False
-    if num_employees > 9:  # only do this when number of TAs is larger than 9, otherwise not necessary
-        df, merged = merge_employee_availability(df, required_columns=required_columns)
-
-    """
-    if the number of groups is larger than 16 (arbitrary cut-off), find the first solution. Typically this solution is
-    already near ideal.
-    """
-    n_groups = df.shape[0]
-    if n_groups > 16:
-        all_solutions = False
-    else:
-        all_solutions = True
-
-    # decrease preferably not rate
-    df = decrease_preferably_not(df,min_availability_ratio=min_availability_ratio)
-
-    # CSP setup
-    solutions = extract_solutions(df, all_solutions, consecutive_ratio)
-    if not solutions:
-        sys.exit("No solutions found, check your dataframe!")
-    elif isinstance(solutions, dict):
-        # immediately return dataframe
-        solution = solutions
-    else:
-        solution = process_solutions(solutions, df)
-
-    # create dataframe to output solution to Excel
-    df = dict_to_dataframe(solution, df)
-    if merged:
-        df.loc[df["TA"].str.contains("-"), "Warning"] = "don't forget to split TAs again"
-
-    write_excel(df, suffix)
-    print('It took {0:0.1f} seconds'.format(time.time() - start))
-    return df
