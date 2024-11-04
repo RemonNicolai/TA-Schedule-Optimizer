@@ -42,12 +42,18 @@ pd.set_option('future.no_silent_downcasting', True)
 
 ### helper and utility functions ####
 def check_input_range(df):
+    """
+    check whether the availability input is limited to 'Yes', 'Preferably Not', and 'No'
+    """
     allowed_input = ['Yes', 'No', 'Preferably Not', np.nan]
     if not df[:, 5:].isin(allowed_input).all():
         sys.exit("Please only use 'Yes', 'Preferably Not' or 'No' as input")
 
 
 def check_structure(df):
+    """
+    check whether first 5 columns correspond with 'Day','Time', 'Group', 'Location', 'Room'
+    """
     example_columns = pd.DataFrame(columns=['Day','Time', 'Group', 'Location', 'Room']).columns
     columns_first5 = df.columns[:5]
     common_column = example_columns.intersection(columns_first5)
@@ -56,6 +62,9 @@ def check_structure(df):
 
 
 def create_team_availability(df):
+    """
+    create team dictionary where each team member has their availability (values) linked to the timeslot (keys)
+    """
     team = {}
     # loop over employees
     for person_n in df.columns[5:]:  # make sure that columns from column 6 onwards are the names
@@ -86,8 +95,10 @@ def create_team_availability(df):
     return team
 
 
-# count number of individuals with more than 1 shift
 def count_plus1shift(df):
+    """
+    count number of individuals with more than 1 shift
+    """
     num_plus1shift = 0
     for person_n in df.columns[5:]:  # make sure that columns from column 6 onwards are the names
         n_shifts = person_n.split('_')[1]
@@ -97,8 +108,10 @@ def count_plus1shift(df):
     return num_plus1shift
 
 
-# create overview of incompatible groups
-def find_incompatible_combinations(dataframe):
+def extract_incompatible_combinations(dataframe):
+    """
+    extract incompatible_combinations, based on groups that take place at same time
+    """
     incompatible_groups = []
     # Iterate over each group
     for day in pd.unique(dataframe["Day"]):
@@ -120,8 +133,10 @@ def find_incompatible_combinations(dataframe):
     return incompatible_groups
 
 
-# find pairs of consecutive shifts
 def extract_consecutive_combinations(dataframe):
+    """
+    extract pairs of consecutive shifts, and categorize them as compatible and incompatible
+    """
     consecutive_groups = []
     inconvenient_groups = []
     df_copy = dataframe.copy()
@@ -144,16 +159,22 @@ def extract_consecutive_combinations(dataframe):
 
 
 ### Dataframe extraction ###
-# create dataframe from final dictionary
 def dict_to_dataframe(schedule_dict, original_df):
+    """
+    create dataframe from final dictionary
+    """
     # select first 5 columns from the original DataFrame
     df_copy = original_df.iloc[:, :5].copy()
     # Apply the schedule_dict to create the "TA" column based on the "Group" column in the original DataFrame
     df_copy["TA"] = df_copy["Group"].map(schedule_dict).fillna('No')
     return df_copy
 
-# write excel
+
+
 def write_excel(df, suffix):
+    """
+    write dataframe to excel
+    """
     cd = os.getcwd()
     output_path = os.path.join(cd, 'output')
     if not os.path.exists(output_path):
@@ -165,8 +186,10 @@ def write_excel(df, suffix):
 
 
 ### Further processing of solutions functions ###
-# count number of consecutive shifts (same TA)
 def count_consecutive(solutions, consecutive_groups):
+    """
+    count number of consecutive groups (same TA)
+    """
     for solution in solutions:
         consecutive_count = 0
         for shift1, shift2 in consecutive_groups:
@@ -178,12 +201,15 @@ def count_consecutive(solutions, consecutive_groups):
         solution['consecutive_shift_count'] = consecutive_count
     return solutions
 
-# count number of 'preferably not' in solution
+
 def count_preference(solutions, team):
+    """
+    count number of non-preference groups in solution
+    """
     for solution in solutions:
         prefNot_counter = 0
         for group, person in solution.items():
-                if team[person]['availability'].get(group) == 'Preferably Not':  # might want to make this a variable/constant
+                if team[person]['availability'].get(group) == 'Preferably Not':
                     # delete the availability from solution
                     prefNot_counter += 1
         solution['preferably_not_count'] = prefNot_counter
@@ -191,22 +217,33 @@ def count_preference(solutions, team):
 
 
 def process_solutions(solutions, df):
-    # the following basically checks if any of the solutions include a timeslot that is not preferred by the employee
+    """
+    Further processes the solutions in case there are multiple solutions.
+    Best solution is selected by first picking the one with the most
+    consecutive shifts (for a TA). If there are still more than 1 left,
+    out of these, it picks the one with the least amount of 'Preferably Not'
+    """
     team = create_team_availability(df)
+    consecutive_groups = extract_consecutive_combinations(df)[0]
+
+    # count number of consecutive groups and number of 'Preferably Not'
+    solutions = count_consecutive(solutions, consecutive_groups)
     solutions = count_preference(solutions, team)
 
-    # schrijf mogelijke combinaties uit van direct op een na volgende groepen
-    consecutive_groups = extract_consecutive_combinations(df)[0]
-    solutions = count_consecutive(solutions, consecutive_groups)
+    # extract list of solutions with max count of consecutive shifts
     max_count = max(sol['consecutive_shift_count'] for sol in solutions)
     solutions_with_most_consecutive = [sol for sol in solutions if sol['consecutive_shift_count'] == max_count]
 
+    # from this list, pick the solution with least 'Preferably Not' count
     best_solution = min(solutions_with_most_consecutive, key=lambda sol: sol['preferably_not_count'])
     return best_solution
 
 
 ### Extract solutions functions ###
 def custom_constraint(*values, list_of_groups, incompatible_combinations, consecutive_groups, plus1shift, consecutive_ratio = float(),team_dict, all_solutions):
+    """
+    custom constraint with nested checks
+    """
     consecutive_count = int(0)
     solution = defaultdict(list)
 
@@ -214,12 +251,20 @@ def custom_constraint(*values, list_of_groups, incompatible_combinations, consec
         solution[value].append(group)
     solution = dict(solution)
 
+    """
+    this constraint checks whether number of shifts is equal to the number of appointed groups
+    """
     compatible = True
     for person, groups in solution.items():
-        if team_dict[person]['n_shifts'] != len(groups):
-            compatible = False
-            return compatible
+       if team_dict[person]['n_shifts'] != len(groups):
+           compatible = False
+           return compatible
 
+    """
+    this constraint checks whether incompatible combinations are in the solution
+    additionally it counts the number of consecutive shifts for a TA, which is used
+    for the final constraint
+    """
     for groups in solution.values():
         if len(groups) == 1:
             continue
@@ -246,6 +291,11 @@ def custom_constraint(*values, list_of_groups, incompatible_combinations, consec
                     if combination in consecutive_groups:
                         consecutive_count += 1
 
+    """
+    this constraint checks whether the ratio of consecutive groups is larger
+    than the threshold. It only does this if only 1 solution is required.
+    This ensures that the sole solution is of slightly higher quality.
+    """
     if not all_solutions:
         consecutive_ratio_sol = consecutive_count / plus1shift
         if consecutive_ratio_sol <= consecutive_ratio:
@@ -253,23 +303,17 @@ def custom_constraint(*values, list_of_groups, incompatible_combinations, consec
     return compatible
 
 
-def extract_solutions(df, team, consecutive_ratio):
-    CUT_OFF = 16
-    num_plus1shift = count_plus1shift(df)
+def extract_solutions(df, all_solutions, consecutive_ratio):
     """
-      if the number of groups is larger than 16 (arbitrary cut-off), find the first solution. Typically this solution is
-      already near perfect.
+    extract the solution
     """
-    n_groups = df.shape[0]
-    if n_groups > CUT_OFF:
-        all_solutions = False
-    else:
-        all_solutions = True
+    team = create_team_availability(df)
 
     # extract important information from groups
-    incompatible_groups = find_incompatible_combinations(df)
+    incompatible_groups = extract_incompatible_combinations(df)
     consecutive_groups, consecutive_inconvenient = extract_consecutive_combinations(df)
     incompatible_inconvenient = incompatible_groups + consecutive_inconvenient
+    num_plus1shift = count_plus1shift(df)
 
     domains = {}
     for group in df["Group"]:
@@ -360,6 +404,9 @@ def decrease_preferably_not(df, min_availability_ratio = float(0.4)):
 
 
 def calculate_similarity_scores(dataframe, columns):
+    """
+    calculate similarity scores between each unique pair of TAs
+    """
     binary_df = dataframe[columns].copy()
 
     # preprocess dataframe
@@ -382,7 +429,9 @@ def calculate_similarity_scores(dataframe, columns):
 
 
 def combine_availability(row, col1, col2):
-    # access the values from the specified columns in the row
+    """
+    combine availability of TAs
+    """
     value1 = row[col1]
     value2 = row[col2]
 
@@ -479,20 +528,30 @@ def generate_schedule(dataframe, suffix = None, required_columns = int(9),
     check_input_range(df)
     check_structure(df)
 
-    columns_to_compare = df.columns[5:]
-    num_employees = len(columns_to_compare)
+    """
+    if number of employees is larger than 9, merge TA availability
+    """
+    employee_columns = df.columns[5:]
+    num_employees = len(employee_columns)
     merged = False
     if num_employees > 9:  # only do this when number of TAs is larger than 9, otherwise not necessary
         df, merged = merge_employee_availability(df, required_columns=required_columns)
 
+    """
+    if the number of groups is larger than 16 (arbitrary cut-off), find the first solution. Typically this solution is
+    already near ideal.
+    """
+    n_groups = df.shape[0]
+    if n_groups > 16:
+        all_solutions = False
+    else:
+        all_solutions = True
+
     # decrease preferably not rate
     df = decrease_preferably_not(df,min_availability_ratio=min_availability_ratio)
 
-    # create a team availability dictionary for group (which can link back to time, day, and location)
-    team = create_team_availability(df)
-
     # CSP setup
-    solutions = extract_solutions(df, team, consecutive_ratio)
+    solutions = extract_solutions(df, all_solutions, consecutive_ratio)
     if not solutions:
         sys.exit("No solutions found, check your dataframe!")
     elif isinstance(solutions, dict):
